@@ -14,6 +14,7 @@ class MailableGenerator < Rails::Generator::Base
         create_messages
         create_messages_recipients
         create_deliveries
+        add_new_mail_count
       ))
 
       m.readme "INSTALL"
