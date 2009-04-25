@@ -11,31 +11,35 @@ module SpecHelperFunctions
     ActiveRecord::Migration.verbose = false
   end
   
-  def run_migration(name)
+  def run_migration(name, method)
     path = File.expand_path( File.dirname(__FILE__)+"/../generators/mailable/templates/migrate" )
     require path + "/#{name}"
     klass = name.camelize.constantize
-    klass.up
+    klass.send(method)
   end
 
   def setup_db
-    run_migration("create_conversations")
-    run_migration("create_deliveries")
-    run_migration("create_mails")
-    run_migration("create_messages")
-    run_migration("create_messages_recipients")
     ActiveRecord::Schema.define do
       create_table :users, :force => true do |t|
         t.string :name
-        t.integer :new_mail_count, :default => 0, :null => false
       end
     end
+    run_migration("create_conversations", :up)
+    run_migration("create_deliveries", :up)
+    run_migration("create_mails", :up)
+    run_migration("create_messages", :up)
+    run_migration("create_messages_recipients", :up)
+    run_migration("add_new_mail_count", :up)
   end
 
   def teardown_db
-    ActiveRecord::Base.connection.tables.each do |table|
-      ActiveRecord::Base.connection.drop_table(table)
-    end
+    run_migration("create_conversations", :down)
+    run_migration("create_deliveries", :down)
+    run_migration("create_mails", :down)
+    run_migration("create_messages", :down)
+    run_migration("create_messages_recipients", :down)
+    run_migration("add_new_mail_count", :down)
+    ActiveRecord::Base.connection.drop_table("users")
   end
 
   def require_generated_models
