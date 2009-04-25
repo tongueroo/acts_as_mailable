@@ -8,6 +8,10 @@ include SpecHelperFunctions
 setup_db_connection
 require_generated_models
 
+# load plugins dependencies
+$:.unshift File.dirname(__FILE__) + '/../vendor/plugins/will_paginate/lib'
+require 'will_paginate'
+
 # load the plugin
 $:.unshift File.dirname(__FILE__) + '/../lib'
 require File.dirname(__FILE__) + '/../init'

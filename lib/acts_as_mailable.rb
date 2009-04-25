@@ -139,6 +139,10 @@ module Tongueroo #:nocdoc:
           end
           return reply(delivery.conversation, recipients, reply_body, subject)
         end
+        
+        def mailbox
+          mailbox = Mailbox.new(self)
+        end
 
         # used to sync a denormalized new_mail_count on the users table
         def sync_new_mail_count
