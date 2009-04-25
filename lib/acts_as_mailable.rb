@@ -1,4 +1,4 @@
-module Br #:nocdoc:
+module Tongueroo #:nocdoc:
   module Acts #:nocdoc:
     module Mailable #:nocdoc:
 
@@ -18,7 +18,7 @@ module Br #:nocdoc:
           has_many :mails, :order => 'updated_at DESC', :dependent => :delete_all, :conditions => ["trashed = ?", false]
           has_many :conversations, :through => :mails
 
-          include Br::Acts::Mailable::InstanceMethods
+          include Tongueroo::Acts::Mailable::InstanceMethods
         end
       end
 
@@ -155,5 +155,5 @@ end
 # them available to all our models if they want it
 
 ActiveRecord::Base.class_eval do
-  include Br::Acts::Mailable
+  include Tongueroo::Acts::Mailable
 end

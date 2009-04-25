@@ -96,7 +96,6 @@ describe User do
     timestamp.should < @lonna.mails.first.updated_at
   end
 
-  it "should send mails"
   it "should send messages into the right mails" do
     @tung.send_message([@vuon, @lonna], "whatsup", "whatsup")
     @tung.deliveries.all(:conditions => ["mail_type = 'inbox'"]).size.should == 0
