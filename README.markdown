@@ -21,7 +21,7 @@ rubygems:
 sudo gem install tongueroo-acts_as_mailable
 
 # environment.rb
-config.gem "winton-acts_as_mailable", :lib => "acts_as_mailable", :source => "http://gems.github.com"
+config.gem "tongueroo-acts_as_mailable", :lib => "acts_as_mailable", :source => "http://gems.github.com"
 </pre>
 
 Models
