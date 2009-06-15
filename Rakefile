@@ -27,10 +27,10 @@ GEM_NAME = 'acts_as_mailable'
 PKG_FILES = FileList['**/*']
 
 task :default => "gemspec"
- 
+
 spec = Gem::Specification.new do |s|
   s.name = GEM_NAME
-  s.version = "0.1.1"
+  s.version = "0.1.0"
   s.platform = Gem::Platform::RUBY
   s.has_rdoc = false
   s.extra_rdoc_files = [ "README.markdown" ]
@@ -39,11 +39,11 @@ spec = Gem::Specification.new do |s|
   s.author = "Tung Nguyen"
   s.email = "tongueroo@gmail.com"
   s.homepage = "http://github.com/tongueroo/#{GEM_NAME}"
-  
+
   s.require_path = "lib"
   s.files = PKG_FILES.to_a
 end
- 
+
 desc "Install gem"
 task :install do
   Rake::Task['gemspec'].invoke
@@ -52,11 +52,11 @@ task :install do
   `sudo gem install #{GEM_NAME}*.gem`
   `rm #{GEM_NAME}*.gem`
 end
- 
+
 desc "Generate gemspec"
 task :gemspec do
   File.open("#{File.dirname(__FILE__)}/#{GEM_NAME}.gemspec", 'w') do |f|
     f.write(spec.to_ruby)
   end
 end
- 
+

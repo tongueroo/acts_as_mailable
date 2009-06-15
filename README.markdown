@@ -11,21 +11,17 @@ script/plugin:
 <pre>
   script/plugin install http://github.com/tongueroo/acts_as_mailable.git
   script/generate mailable
-  # rename migrations :(
   rake db:migrate
 </pre>
 
 rubygems:
 
 <pre>
-  # terminal
-  sudo gem install tongueroo-acts_as_mailable
+# terminal
+sudo gem install tongueroo-acts_as_mailable
 
-  # environment.rb
-  config.gem "tongueroo-acts_as_mailable", :lib => "acts_as_mailable", :source => "http://gems.github.com"
-  script/generate mailable
-  # rename migrations :(
-  rake db:migrate
+# environment.rb
+config.gem "tongueroo-acts_as_mailable", :lib => "acts_as_mailable", :source => "http://gems.github.com"
 </pre>
 
 Models

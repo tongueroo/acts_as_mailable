@@ -10,7 +10,7 @@ module SpecHelperFunctions
     ActiveRecord::Base.establish_connection :adapter => 'mysql', :database  => 'acts_as_mailable', :user => 'root'
     ActiveRecord::Migration.verbose = false
   end
-  
+
   def run_migration(name, method)
     path = File.expand_path( File.dirname(__FILE__)+"/../generators/mailable/templates/migrate" )
     require path + "/#{name}"

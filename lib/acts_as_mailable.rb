@@ -41,36 +41,88 @@ module Tongueroo #:nocdoc:
         #   todd = User.find(4141)
         #   phil.send_message(todd, 'whats up for tonight?', 'hey guy')      #sends a Mail message to todd's inbox, and a Mail message to phil's sentbox
         #
-        def send_message(recipients, msg_body, subject = '', prev_convo = nil)
+        #
+        # send_message does this
+        # 1. create conversation
+        # 2. create message
+        # 3. create mail entries
+        #      convo.add(recipients, 'inbox')  -> recipients: inboxes
+        #      convo.add(sender, 'sentbox')    -> sender: sentboxes
+        # 4. create delivery entries
+        #      message.deliver('inbox')        -> recipients: flag where it came from, also used to determine if we should email
+        #      Deliver.create('sentbox)        -> sender:
+        def send_message(opts)
+          recipients = opts[:recipients]
+          body = opts[:body]
+          subject = opts[:subject]
+
           recipients = [recipients].flatten
-          convo = Conversation.create({:subject => subject})
-          convo.add(recipients, 'inbox')
+          convo = Conversation.create(:subject => subject)
+          message = Message.create(:sender => self, :conversation => convo, :body => body, :subject => subject)
+          message.recipients << recipients
 
-          # if forking from another conversation, copy over the entries
-          if prev_convo
-            # only want to create mails for the users included in the forked conversation
-            deliveries = prev_convo.deliveries.select do |x|
-              self == x.user or recipients.include?(x.user)
-            end
-            deliveries.each do |delivery|
-              attributes = delivery.attributes.clone()
-              attributes.delete("id")
-              attributes.update("conversation_id" => convo.id, "mail_type" => "fork_#{attributes["mail_type"]}")
-              Delivery.create(attributes)
-            end
-          end
+          convo.add(:sender => self, :recipients => recipients, :mail_type => 'inbox')
+          convo.add(:sender => self, :recipients => self, :mail_type => 'sentbox')
 
-          message = Message.create({:sender => self, :conversation => convo,  :body => msg_body, :subject => subject})
-          message.recipients = recipients
-          message.deliver('inbox')
-
-          convo.add(self, 'sentbox')
-          if prev_convo
-            convo.add(self, 'inbox')
-          end
-          Delivery.create(:user => self, :message => message, :conversation => convo, :mail_type => 'sentbox')
-          return message
+          message.deliver('inbox') # TODO: make sure not to deliver emails
+          delivery = Delivery.create(:user => self, :message => message, :conversation => convo, :mail_type => 'sentbox')
+          return delivery
         end
+
+        # fork_message
+        # 1. create conversation
+        # 2. create message
+        #      ** also copy over messages
+        # 3. create mail entries
+        #      convo.add(recipients, 'inbox')  -> recipients: inboxes, only 1 recipient
+        #      convo.add(sender, 'sentbox')    -> sender: sentboxes
+        #      ** new extra mail entries for the user of the forked conversation, forker should also have an inbox entry
+        # 4. create delivery entries
+        #      ** for each old delivery
+        #      **  create delivery but do not delivery email for recipients and sender
+        #      message.deliver('inbox')        -> recipients: flag where it came from, also used to determine if we should email
+        #      Deliver.create('sentbox)        -> sender:
+        def fork_message(opts)
+          old_convo = opts[:old_convo]
+          recipients = opts[:recipients]
+          body = opts[:body]
+          subject = opts[:subject]
+
+          recipients = [recipients].flatten
+          convo = Conversation.create(:subject => subject)
+          message = Message.create(:sender => self, :conversation => convo, :body => body, :subject => subject)
+          message.recipients << recipients
+          # fork extras
+          copy_fork_messages(old_convo, convo, body)
+
+          convo.add(:sender => self, :recipients => recipients, :mail_type => 'inbox')
+          convo.add(:sender => self, :recipients => self, :mail_type => 'sentbox')
+          # fork extras
+          create_fork_mails(convo)
+
+          # fork extras, important to create old deliveries first
+          create_fork_deliveries(old_convo, convo)
+          message.deliver('inbox')
+          delivery = Delivery.create(:user => self, :message => message, :conversation => convo, :mail_type => 'sentbox')
+          return delivery
+        end
+        def copy_fork_messages(old_convo, convo, msg_body)
+          subject = old_convo.subject.sub(/^(Re: )?/, "Re: ")
+          old_convo.messages.each do |old|
+            Message.create(:sender => old.sender, :conversation => convo, :body => msg_body, :subject => subject, :created_at => old.created_at)
+          end
+        end
+
+        def create_fork_mails(convo)
+          convo.add(:sender => self, :recipients => self, :mail_type => 'inbox')
+          # convo.add(self, 'inbox')
+        end
+        def create_fork_deliveries(old_convo, convo)
+          old_convo.deliveries.each do |old|
+            Delivery.create(:user => old.user, :message => old.message, :conversation => convo, :mail_type => "fork_#{old.mail_type}", :created_at => old.created_at)
+          end
+        end
+
         #creates a new Message associated with the given conversation and delivers the reply to each of the given recipients.
         #
         #*explicitly calling this method is rare unless you are replying to a subset of the users involved in the conversation or
@@ -91,12 +143,12 @@ module Tongueroo #:nocdoc:
         #
         def reply(conversation, recipients, reply_body, subject = nil)
           return nil if(reply_body.blank?)
-          conversation.add(recipients, 'inbox')
+          conversation.add(:sender => self, :recipients => recipients, :mail_type => 'inbox')
           subject = subject || conversation.subject.sub(/^(Re: )?/, "Re: ")
           response = Message.create({:sender => self, :conversation => conversation, :body => reply_body, :subject => subject})
           response.recipients = recipients.is_a?(Array) ? recipients : [recipients]
           response.deliver('inbox')
-          conversation.add(self, 'sentbox')
+          conversation.add(:sender => self, :recipients => self, :mail_type => 'sentbox')
 
           Delivery.create(:user => self, :message => response, :conversation => conversation, :mail_type => 'sentbox')
           return response
@@ -104,8 +156,8 @@ module Tongueroo #:nocdoc:
         #sends a Mail to the sender of the given mail message.
         #
         #====params:
-        #mail::
-        #     the Mail object that you are replying to.
+        #conversation::
+        #     the Conversation object that you are replying to.
         #reply_body::
         #     the body of the reply message.
         #subject::
@@ -113,14 +165,14 @@ module Tongueroo #:nocdoc:
         #====returns:
         #the sent Delivery.
         #
-        def reply_to_sender(delivery, reply_body, subject = nil)
-          return reply(delivery.conversation, delivery.message.sender, reply_body, subject)
+        def reply_to_sender(conversation, reply_body, subject = nil)
+          return reply(conversation, conversation.originator, reply_body, subject)
         end
         #sends a Mail to all of the recipients of the given mail message (excluding yourself).
         #
         #====params:
-        #delivery::
-        #     the Mail object that you are replying to.
+        #conversation::
+        #     the Conversation object that you are replying to.
         #reply_body::
         #     the body of the reply message.
         #subject::
@@ -128,8 +180,8 @@ module Tongueroo #:nocdoc:
         #====returns:
         #the sent Delivery.
         #
-        def reply_to_all(delivery, reply_body, subject = nil)
-          msg = delivery.message
+        def reply_to_all(conversation, reply_body, subject = nil)
+          msg = conversation.last_message
           recipients = msg.recipients.clone()
           if(msg.sender != self)
             recipients.delete(self)
@@ -137,7 +189,7 @@ module Tongueroo #:nocdoc:
               recipients << msg.sender
             end
           end
-          return reply(delivery.conversation, recipients, reply_body, subject)
+          return reply(conversation, recipients, reply_body, subject)
         end
 
         # used to sync a denormalized new_mail_count on the users table
