@@ -15,7 +15,7 @@ module Tongueroo #:nocdoc:
         #
         def acts_as_mailable(options = {})
           has_many :deliveries, :order => 'created_at DESC', :dependent => :delete_all
-          has_many :mails, :order => 'updated_at DESC', :dependent => :delete_all, :conditions => ["trashed = ?", false]
+          has_many :mails, :order => 'updated_at DESC', :dependent => :delete_all, :conditions => ["mails.trashed = ?", false]
           has_many :conversations, :through => :mails
 
           include Tongueroo::Acts::Mailable::InstanceMethods
@@ -52,11 +52,20 @@ module Tongueroo #:nocdoc:
         #      message.deliver('inbox')        -> recipients: flag where it came from, also used to determine if we should email
         #      Deliver.create('sentbox)        -> sender:
         def send_message(opts)
+          return unless ok_to_send
+
           recipients = opts[:recipients]
           body = opts[:body]
           subject = opts[:subject]
 
           recipients = [recipients].flatten
+
+          # # filter out the blocked users, abstract and put into plugin
+          # recipients = recipients.reject {|u| u.blocked_user?(self.id) }  #
+          # if recipients.empty? or self.is_a_bozo
+          #   return # changing the return signature here! , returns nil
+          # end
+
           convo = Conversation.create(:subject => subject)
           message = Message.create(:sender => self, :conversation => convo, :body => body, :subject => subject)
           message.recipients << recipients
@@ -64,7 +73,7 @@ module Tongueroo #:nocdoc:
           convo.add(:sender => self, :recipients => recipients, :mail_type => 'inbox')
           convo.add(:sender => self, :recipients => self, :mail_type => 'sentbox')
 
-          message.deliver('inbox') # TODO: make sure not to deliver emails
+          message.deliver('inbox')
           delivery = Delivery.create(:user => self, :message => message, :conversation => convo, :mail_type => 'sentbox')
           return delivery
         end
@@ -83,12 +92,21 @@ module Tongueroo #:nocdoc:
         #      message.deliver('inbox')        -> recipients: flag where it came from, also used to determine if we should email
         #      Deliver.create('sentbox)        -> sender:
         def fork_message(opts)
+          return unless ok_to_send
+
           old_convo = opts[:old_convo]
           recipients = opts[:recipients]
           body = opts[:body]
           subject = opts[:subject]
 
           recipients = [recipients].flatten
+
+          # # filter out the blocked users, abstract and put into plugin
+          # recipients = recipients.reject {|u| u.blocked_user?(self.id) }
+          # if recipients.empty? or self.is_a_bozo
+          #   return # changing the return signature here! , returns nil
+          # end
+
           convo = Conversation.create(:subject => subject)
           message = Message.create(:sender => self, :conversation => convo, :body => body, :subject => subject)
           message.recipients << recipients
@@ -142,6 +160,8 @@ module Tongueroo #:nocdoc:
         #the sent Delivery.
         #
         def reply(conversation, recipients, reply_body, subject = nil)
+          return unless ok_to_send
+
           return nil if(reply_body.blank?)
           conversation.add(:sender => self, :recipients => recipients, :mail_type => 'inbox')
           subject = subject || conversation.subject.sub(/^(Re: )?/, "Re: ")
@@ -166,6 +186,9 @@ module Tongueroo #:nocdoc:
         #the sent Delivery.
         #
         def reply_to_sender(conversation, reply_body, subject = nil)
+          # not really being used, consider removing
+          # return unless ok_to_send
+          #
           return reply(conversation, conversation.originator, reply_body, subject)
         end
         #sends a Mail to all of the recipients of the given mail message (excluding yourself).
@@ -181,8 +204,17 @@ module Tongueroo #:nocdoc:
         #the sent Delivery.
         #
         def reply_to_all(conversation, reply_body, subject = nil)
+          return unless ok_to_send
+
           msg = conversation.last_message
           recipients = msg.recipients.clone()
+
+          # # filter out the blocked users, abstract and put into plugin
+          # recipients = recipients.reject {|u| u.blocked_user?(self.id) }
+          # if recipients.empty? or self.is_a_bozo
+          #   return # changing the return signature here! , returns nil
+          # end
+
           if(msg.sender != self)
             recipients.delete(self)
             if(!recipients.include?(msg.sender))
@@ -192,10 +224,25 @@ module Tongueroo #:nocdoc:
           return reply(conversation, recipients, reply_body, subject)
         end
 
+        # meant to override for permission controls
+        def ok_to_send; true; end
+
         # used to sync a denormalized new_mail_count on the users table
         def sync_new_mail_count
-          c = conversations.count(:conditions => ["mails.mail_type = 'inbox' and mails.read = 0"])
+          c = conversations.count(
+            :conditions => "mails.mail_type = 'inbox' and mails.read = 0 and users.is_a_bozo <> 1",
+            :include => :users
+          )
           self.class.update_all ["new_mail_count = ?", c], ["id = ?", id]
+        end
+        
+        def destroy
+          Mail.delete_all ["sender_id = ?", self.id]
+          Mail.delete_all ["user_id = ?", self.id]
+          Delivery.delete_all ["user_id = ?", self.id]
+          # Delivery.delete_all ["sender_id = ?", self.id] # need to add this after Ive denormailze the sender_id column, right now I've fixed it from the view end
+          Message.delete_all ["sender_id = ?", self.id]
+          super
         end
       end
 
