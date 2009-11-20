@@ -231,7 +231,7 @@ module Tongueroo #:nocdoc:
         def sync_new_mail_count
           c = conversations.count(
             :conditions => "mails.mail_type = 'inbox' and mails.read = 0 and users.is_a_bozo <> 1",
-            :include => :users
+            :include => { :mails => :sender }
           )
           self.class.update_all ["new_mail_count = ?", c], ["id = ?", id]
         end
